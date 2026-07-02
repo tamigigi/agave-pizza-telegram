@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGAVE PALMARE PRO</title>
+    <style>
+        body { background: #121212; color: #fff; font-family: sans-serif; padding: 10px; margin: 0; }
+        .sezione { background: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #333; }
+        .riga { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2a2a; padding: 10px 0; font-size: 14px; }
+        .btn-prodotto { background: #2d2d2d; border: 1px solid #444; color: #fff; padding: 14px 4px; width: 48%; margin: 4px 0; cursor: pointer; border-radius: 4px; font-size: 13px; text-align: center; }
+        button { cursor: pointer; padding: 8px 12px; border: none; border-radius: 4px; color: white; font-weight: bold; margin: 2px; }
+        .cash { background: #2e7d32; }
+        .pos { background: #1565c0; }
+        .elimina { background: #c62828; }
+        .stampa { background: #e65100; }
+        .msg-btn { background: #607d8b; font-size: 11px; padding: 6px 8px; }
+        input[type="number"], input[type="text"] { padding: 8px; margin: 2px; border-radius: 4px; border: 1px solid #555; background: #333; color: white; text-align: center; }
+        #box-totali { font-size: 16px; font-weight: bold; color: #00ffcc; line-height: 1.5; }
+        h4 { color: #ff9900; margin-bottom: 5px; border-bottom: 1px solid #ff9900; padding-bottom: 3px; margin-top: 15px; text-transform: uppercase;}
+        
+        /* Stili per il nuovo Pop-Up (Modal) */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-box { background: #1e1e1e; padding: 20px; border-radius: 10px; width: 90%; max-width: 400px; border: 1px solid #444; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .modal-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .modal-btn-qta { background: #444; color: white; font-size: 18px; padding: 5px 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="sezione">
+        <label>Tavolo:</label>
+        <input type="number" id="num-tavolo" value="1" onchange="caricaTavolo()" style="width: 50px;">
+        <label>Coperti:</label>
+        <input type="number" id="coperti" value="1" onchange="salvaCoperti()" style="width: 50px;">
+        <br><br>
+        <label>Note Tavolo:</label>
+        <input type="text" id="note-tavolo" placeholder="Scrivi note e premi invio..." onchange="salvaInfo()" style="width: 70%;">
+    </div>
+
+    <div class="sezione" id="box-totali"></div>
+    
+    <div class="sezione" id="lista-ordine"></div>
+
+    <div class="sezione">
+        <h4>INVIO DIRETTO AI REPARTI</h4>
+        <div style="display: flex; justify-content: space-between;">
+            <button class="stampa" style="width: 32%; font-size: 11px;" onclick="stampaReparto('bar')">🖨️ STAMPA BAR</button>
+            <button class="stampa" style="width: 32%; font-size: 11px;" onclick="stampaReparto('cucina')">🖨️ STAMPA CUCINA</button>
+            <button class="stampa" style="width: 32%; font-size: 11px; background: #2e7d32;" onclick="stampaReparto('cassa')">💶 STAMPA CASSA</button>
+        </div>
+        <hr style="border-color: #333; margin: 15px 0;">
+        <input type="text" id="messaggio" placeholder="Scrivi un messaggio rapido..." style="width: 95%; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between;">
+            <button class="msg-btn" style="width: 32%; font-size: 11px;" onclick="inviaMessaggio('bar')">INVIA A BAR</button>
+            <button class="msg-btn" style="width: 32%; font-size: 11px;" onclick="inviaMessaggio('cucina')">INVIA A CUCINA</button>
+            <button class="msg-btn" style="width: 32%; font-size: 11px; background: #9c27b0;" onclick="inviaMessaggio('cassa')">INVIA A CASSA</button>
+        </div>
+    </div>
+
+        <div class="sezione">
+        {% for cat, prods in menu.items() %}
+            <h4>{{ cat }}</h4>
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between;">
+            {% if prods is iterable and prods is not string and prods is not mapping %}
+                {% for p in prods %}
+                    <button class="btn-prodotto" onclick="apriModal('{{ p | replace("'", "\\'") }}', '{{ cat | replace("'", "\\'") }}', null)">{{ p }}</button>
+                {% endfor %}
+            {% elif prods is mapping %}
+                {% for p, prezzo in prods.items() %}
+                    <button class="btn-prodotto" onclick="apriModal('{{ p | replace("'", "\\'") }}', null, '{{ prezzo }}')">{{ p }} ({{ "%0.2f" | format(prezzo) }}€)</button>
+                {% endfor %}
+            {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+
+    <div class="modal-overlay" id="custom-modal">
+        <div class="modal-box">
+            <h3 id="modal-title" style="margin-top: 0; color: #ff9900; border-bottom: 1px solid #444; padding-bottom: 10px;">Prodotto</h3>
+            
+            <div class="modal-row">
+                <label>Quantità:</label>
+                <div>
+                    <button class="modal-btn-qta" onclick="modQta(-1)">-</button>
+                    <input type="number" id="modal-qta" value="1" style="width: 40px; font-size: 16px; font-weight: bold;">
+                    <button class="modal-btn-qta" onclick="modQta(1)">+</button>
+                </div>
+            </div>
+
+            <div class="modal-row">
+                <label>Calici:</label>
+                <div>
+                    <button class="modal-btn-qta" onclick="modCalici(-1)">-</button>
+                    <input type="number" id="modal-calici" value="0" style="width: 40px; font-size: 16px; font-weight: bold;">
+                    <button class="modal-btn-qta" onclick="modCalici(1)">+</button>
+                </div>
+            </div>
+
+            <div class="modal-row">
+                <label>Prezzo Unit. (€):</label>
+                <input type="number" step="0.50" id="modal-prezzo" style="width: 80px; font-size: 16px; font-weight: bold;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom: 5px;">Note Rapide (clicca per aggiungere):</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;">
+                    <button class="msg-btn" onclick="aggiungiNotaRapida('Poco ghiaccio')">🧊 Poco Ghiaccio</button>
+                    <button class="msg-btn" onclick="aggiungiNotaRapida('Senza ghiaccio')">🚫 No Ghiaccio</button>
+                    <button class="msg-btn" onclick="aggiungiNotaRapida('Sale e Limone')">🧂 Sale/Limone</button>
+                    <button class="msg-btn" onclick="aggiungiNotaRapida('In Coppa')">🍸 In Coppa</button>
+                    <button class="msg-btn" onclick="aggiungiNotaRapida('On the rocks')">🥃 On the rocks</button>
+                </div>
+                <input type="text" id="modal-note" placeholder="Scrivi una nota libera (es. Tonica Fever Tree)..." style="width: 95%;">
+            </div>
+
+            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                <button class="elimina" style="width: 48%; padding: 12px;" onclick="chiudiModal()">ANNULLA</button>
+                <button class="cash" style="width: 48%; padding: 12px;" onclick="confermaAggiunta()">AGGIUNGI</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let prodottoSelezionato = "";
+
+        function calcolaPrezzoDefault(nome, categoria, prezzoDizionario) {
+            if (prezzoDizionario) return parseFloat(prezzoDizionario).toFixed(2);
+            let match = nome.match(/\((\d+[\.,]\d+)€\)/);
+            if (match) return match[1];
+            if (categoria && categoria.includes("10.00€")) return "10.00";
+            if (categoria && categoria.includes("8.00€")) return "8.00";
+            if (categoria && categoria.includes("7.00€")) return "7.00";
+            if (categoria && categoria.includes("6.00€")) return "6.00";
+            if (categoria && categoria.includes("5.00€")) return "5.00";
+            return "10.00"; 
+        }
+
+        // QUESTA FUNZIONE APRE IL NUOVO POP-UP
+        function apriModal(nome, categoria, prezzoDizionario) {
+            prodottoSelezionato = nome;
+            let defPrice = calcolaPrezzoDefault(nome, categoria, prezzoDizionario);
+            
+            document.getElementById('modal-title').innerText = nome;
+            document.getElementById('modal-qta').value = 1;
+            document.getElementById('modal-calici').value = 0;
+            document.getElementById('modal-prezzo').value = defPrice;
+            document.getElementById('modal-note').value = "";
+            
+            document.getElementById('custom-modal').style.display = 'flex';
+        }
+
+        function chiudiModal() {
+            document.getElementById('custom-modal').style.display = 'none';
+        }
+
+        function modQta(valore) {
+            let qtaInput = document.getElementById('modal-qta');
+            let nuovaQta = parseInt(qtaInput.value) + valore;
+            if (nuovaQta >= 1) qtaInput.value = nuovaQta;
+        }
+
+        function modCalici(valore) {
+            let caliciInput = document.getElementById('modal-calici');
+            let nuoviCalici = parseInt(caliciInput.value) + valore;
+            if (nuoviCalici >= 0) caliciInput.value = nuoviCalici;
+        }
+
+        function aggiungiNotaRapida(testo) {
+            let notaInput = document.getElementById('modal-note');
+            if (notaInput.value.length > 0) {
+                notaInput.value += ", " + testo;
+            } else {
+                notaInput.value = testo;
+            }
+        }
+
+        function confermaAggiunta() {
+            let qta = document.getElementById('modal-qta').value;
+            let calici = document.getElementById('modal-calici').value;
+            let prezzo = document.getElementById('modal-prezzo').value;
+            let nota = document.getElementById('modal-note').value;
+
+            fetch('/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tavolo: document.getElementById('num-tavolo').value,
+                    prodotto: prodottoSelezionato,
+                    quantita: qta,
+                    calici: calici,
+                    nota: nota,
+                    prezzo_personalizzato: prezzo
+                })
+            }).then(() => {
+                chiudiModal();
+                caricaTavolo();
+            });
+        }
+
+        function caricaTavolo() {
+            fetch('/get_tavolo/' + document.getElementById('num-tavolo').value)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('coperti').value = data.coperti;
+                document.getElementById('note-tavolo').value = data.info;
+                
+                document.getElementById('box-totali').innerHTML = `
+                    <div style="margin-bottom: 10px;"><b>Totale Tavolo:</b> ${data.totale.toFixed(2)} €</div>
+                    <div style="display:flex; justify-content:space-between; font-size:13px;">
+                        <span style="color: #81c784;">Pagato Cash: ${data.gia_incassato_contanti.toFixed(2)} €</span>
+                        <span style="color: #64b5f6;">Pagato POS: ${data.gia_incassato_carta.toFixed(2)} €</span>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 18px; color: #ff5252;">Residuo: ${data.residuo.toFixed(2)} €</div>
+                `;
+
+                let html = '';
+                data.ordine.forEach((item, idx) => {
+                    html += `
+                    <div class="riga">
+                        <span style="width: 50%;">
+                            <strong>${item.qta}x</strong> ${item.prodotto} <br><span style="color:#aaa; font-size:12px;">(${item.prezzo.toFixed(2)}€)</span>
+                            ${item.note ? '<br><small style="color:#ff9900;">[' + item.note + ']</small>' : ''}
+                        </span>
+                        <div style="display:flex; gap: 4px;">
+                            <button class="cash" style="padding: 10px 8px; font-size:11px;" onclick="paga('CONTANTI', ${item.prezzo})">CASH</button>
+                            <button class="pos" style="padding: 10px 8px; font-size:11px;" onclick="paga('CARTA', ${item.prezzo})">POS</button>
+                            <button class="elimina" style="padding: 10px 12px; font-size:11px;" onclick="eliminaVoce(${idx})">X</button>
+                        </div>
+                    </div>`;
+                });
+                document.getElementById('lista-ordine').innerHTML = html || '<p style="color:#666;text-align:center;">Nessun prodotto nell\'ordine</p>';
+            });
+        }
+
+        function paga(tipo, prezzoSuggerito) {
+            let importo = prompt("Importo da registrare (" + tipo + "):", prezzoSuggerito.toFixed(2));
+            if (!importo || parseFloat(importo) <= 0) return;
+            fetch('/paga/' + document.getElementById('num-tavolo').value, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tipo: tipo, importo: importo })
+            }).then(() => caricaTavolo());
+        }
+
+        function eliminaVoce(indice) {
+            if(confirm("Eliminare la riga?")) {
+                fetch('/elimina_voce/' + document.getElementById('num-tavolo').value + '/' + indice, { method: 'POST' })
+                .then(() => caricaTavolo());
+            }
+        }
+
+        function salvaCoperti() {
+            fetch('/coperti/' + document.getElementById('num-tavolo').value, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ coperti: document.getElementById('coperti').value })
+            });
+        }
+
+        function salvaInfo() {
+            fetch('/salva_info/' + document.getElementById('num-tavolo').value, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ info: document.getElementById('note-tavolo').value })
+            });
+        }
+
+        function inviaMessaggio(dest) {
+            let txt = document.getElementById('messaggio').value;
+            if (!txt) return;
+            fetch('/messaggio_stampante', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reparto: dest, testo: txt })
+            }).then(() => {
+                document.getElementById('messaggio').value = '';
+                alert("Messaggio inviato a " + dest.toUpperCase());
+            });
+        }
+
+        function stampaReparto(dest) {
+            fetch('/stampa/' + document.getElementById('num-tavolo').value + '?dest=' + dest, { method: 'POST' })
+            .then(r => r.json())
+            .then(d => { alert(d.status); caricaTavolo(); });
+        }
+
+        window.onload = function() { caricaTavolo(); };
+    </script>
+</body>
+</html>
+
+
